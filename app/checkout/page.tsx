@@ -8,6 +8,12 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+declare global {
+  interface Window {
+    Razorpay: any
+  }
+}
+
 export default function Checkout() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [form, setForm] = useState({
@@ -21,6 +27,9 @@ export default function Checkout() {
 
   useEffect(() => {
     setCart(getCart())
+    const script = document.createElement('script')
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+    document.body.appendChild(script)
   }, [])
 
   const total = cart.reduce((sum, item) => sum + item.price * item.qty, 0)
@@ -36,53 +45,77 @@ export default function Checkout() {
     }
     setLoading(true)
 
-    const { data: order, error } = await supabase
-      .from('orders')
-      .insert({
-        customer_name: form.name,
-        phone: form.phone,
-        pickup_date: form.date,
-        pickup_time: form.time,
-        notes: form.notes,
-        total: total,
-        status: 'pending'
-      })
-      .select()
-      .single()
-
-    if (error || !order) {
-      alert('Something went wrong. Please try again!')
-      setLoading(false)
-      return
-    }
-
-    await supabase.from('order_items').insert(
-      cart.map(item => ({
-        order_id: order.id,
-        product_id: item.id,
-        product_name: item.name,
-        price: item.price,
-        qty: item.qty
-      }))
-    )
-
-    await fetch('/api/send-email', {
+    const orderRes = await fetch('/api/create-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        customerName: form.name,
-        phone: form.phone,
-        total: total,
-        pickupDate: form.date,
-        pickupTime: form.time,
-        notes: form.notes,
-        items: cart
-      })
+      body: JSON.stringify({ amount: total })
     })
+    const razorpayOrder = await orderRes.json()
 
-    clearCart()
+    const options = {
+      key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+      amount: razorpayOrder.amount,
+      currency: 'INR',
+      name: 'Coco Bakery',
+      description: 'Bakery Order',
+      order_id: razorpayOrder.id,
+      prefill: {
+        name: form.name,
+        contact: form.phone,
+      },
+      theme: { color: '#3d1f0e' },
+      handler: async function(response: any) {
+        const { data: order, error } = await supabase
+          .from('orders')
+          .insert({
+            customer_name: form.name,
+            phone: form.phone,
+            pickup_date: form.date,
+            pickup_time: form.time,
+            notes: form.notes,
+            total: total,
+            status: 'paid'
+          })
+          .select()
+          .single()
+
+        if (error || !order) {
+          alert('Payment done but order save failed. Please contact us!')
+          return
+        }
+
+        await supabase.from('order_items').insert(
+          cart.map(item => ({
+            order_id: order.id,
+            product_id: item.id,
+            product_name: item.name,
+            price: item.price,
+            qty: item.qty
+          }))
+        )
+
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerName: form.name,
+            phone: form.phone,
+            total: total,
+            pickupDate: form.date,
+            pickupTime: form.time,
+            notes: form.notes,
+            items: cart
+          })
+        })
+
+        clearCart()
+        window.location.href = '/order-confirmed?name=' + form.name + '&total=' + total + '&date=' + form.date + '&time=' + form.time
+      }
+    }
+
     setLoading(false)
-    window.location.href = '/order-confirmed?name=' + form.name + '&total=' + total + '&date=' + form.date + '&time=' + form.time
+    const rzp = new window.Razorpay(options)
+    rzp.open()
   }
 
   return (
@@ -145,7 +178,7 @@ export default function Checkout() {
             <textarea name="notes" value={form.notes} onChange={handleChange} className="w-full p-3 rounded-xl" style={{backgroundColor: "#ede0d4", color: "#3d1f0e", border: "none", outline: "none"}} placeholder="Any special requests?" rows={3}/>
           </div>
           <button onClick={handleSubmit} disabled={loading} className="w-full py-3 rounded-full font-bold hover:opacity-80" style={{backgroundColor: "#3d1f0e", color: "#ede0d4"}}>
-            {loading ? 'Placing order...' : 'Place Order'}
+            {loading ? 'Processing...' : `Pay ₹${total}`}
           </button>
         </div>
       </section>
