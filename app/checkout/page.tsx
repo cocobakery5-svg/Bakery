@@ -1,6 +1,12 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { getCart, clearCart, CartItem } from '@/lib/cart'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export default function Checkout() {
   const [cart, setCart] = useState<CartItem[]>([])
@@ -11,6 +17,7 @@ export default function Checkout() {
     time: '',
     notes: ''
   })
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     setCart(getCart())
@@ -22,14 +29,45 @@ export default function Checkout() {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!form.name || !form.phone || !form.date || !form.time) {
       alert('Please fill in all required fields!')
       return
     }
-    alert(`Thank you ${form.name}! Your order of ₹${total} is confirmed for pickup on ${form.date} at ${form.time}.`)
+    setLoading(true)
+    const { data: order, error } = await supabase
+      .from('orders')
+      .insert({
+        customer_name: form.name,
+        phone: form.phone,
+        pickup_date: form.date,
+        pickup_time: form.time,
+        notes: form.notes,
+        total: total,
+        status: 'pending'
+      })
+      .select()
+      .single()
+
+    if (error || !order) {
+      alert('Something went wrong. Please try again!')
+      setLoading(false)
+      return
+    }
+
+    await supabase.from('order_items').insert(
+      cart.map(item => ({
+        order_id: order.id,
+        product_id: item.id,
+        product_name: item.name,
+        price: item.price,
+        qty: item.qty
+      }))
+    )
+
     clearCart()
-    window.location.href = '/'
+    setLoading(false)
+    window.location.href = '/order-confirmed?name=' + form.name + '&total=' + total + '&date=' + form.date + '&time=' + form.time
   }
 
   return (
@@ -91,8 +129,8 @@ export default function Checkout() {
             <label className="block mb-1 font-bold" style={{color: "#3d1f0e"}}>Notes</label>
             <textarea name="notes" value={form.notes} onChange={handleChange} className="w-full p-3 rounded-xl" style={{backgroundColor: "#ede0d4", color: "#3d1f0e", border: "none", outline: "none"}} placeholder="Any special requests?" rows={3}/>
           </div>
-          <button onClick={handleSubmit} className="w-full py-3 rounded-full font-bold hover:opacity-80" style={{backgroundColor: "#3d1f0e", color: "#ede0d4"}}>
-            Place Order
+          <button onClick={handleSubmit} disabled={loading} className="w-full py-3 rounded-full font-bold hover:opacity-80" style={{backgroundColor: "#3d1f0e", color: "#ede0d4"}}>
+            {loading ? 'Placing order...' : 'Place Order'}
           </button>
         </div>
       </section>
