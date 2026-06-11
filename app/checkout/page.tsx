@@ -35,6 +35,7 @@ export default function Checkout() {
       return
     }
     setLoading(true)
+
     const { data: order, error } = await supabase
       .from('orders')
       .insert({
@@ -64,6 +65,20 @@ export default function Checkout() {
         qty: item.qty
       }))
     )
+
+    await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerName: form.name,
+        phone: form.phone,
+        total: total,
+        pickupDate: form.date,
+        pickupTime: form.time,
+        notes: form.notes,
+        items: cart
+      })
+    })
 
     clearCart()
     setLoading(false)
