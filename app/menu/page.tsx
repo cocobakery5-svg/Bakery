@@ -1,4 +1,16 @@
-export default function Menu() {
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
+export default async function Menu() {
+  const { data: products } = await supabase
+    .from('products')
+    .select('*')
+    .eq('available', true)
+
   return (
     <main className="min-h-screen" style={{backgroundColor: "#ede0d4"}}>
       <nav className="px-8 py-4 flex justify-between items-center" style={{backgroundColor: "#e8d5c4"}}>
@@ -14,24 +26,13 @@ export default function Menu() {
         <h2 className="text-4xl font-bold mb-2" style={{color: "#3d1f0e"}}>This Weeks Menu</h2>
         <p className="text-lg mb-12" style={{color: "#6b3a2a"}}>Fresh every Saturday. Order before Friday!</p>
         <div className="grid grid-cols-3 gap-8 px-8">
-          <div className="rounded-2xl p-6 text-left" style={{backgroundColor: "#e8d5c4"}}>
-            <div className="text-5xl mb-4">🥣</div>
-            <h3 className="text-xl font-bold mb-1" style={{color: "#3d1f0e"}}>Overnight Oats</h3>
-            <p className="mb-4" style={{color: "#6b3a2a"}}>Creamy oats with seasonal fruits and zero refined sugar</p>
-            <p className="text-lg font-bold" style={{color: "#3d1f0e"}}>₹180</p>
-          </div>
-          <div className="rounded-2xl p-6 text-left" style={{backgroundColor: "#e8d5c4"}}>
-            <div className="text-5xl mb-4">🥞</div>
-            <h3 className="text-xl font-bold mb-1" style={{color: "#3d1f0e"}}>Banana Pancakes</h3>
-            <p className="mb-4" style={{color: "#6b3a2a"}}>Fluffy pancakes made with banana and oat flour</p>
-            <p className="text-lg font-bold" style={{color: "#3d1f0e"}}>₹220</p>
-          </div>
-          <div className="rounded-2xl p-6 text-left" style={{backgroundColor: "#e8d5c4"}}>
-            <div className="text-5xl mb-4">🍮</div>
-            <h3 className="text-xl font-bold mb-1" style={{color: "#3d1f0e"}}>Chia Pudding</h3>
-            <p className="mb-4" style={{color: "#6b3a2a"}}>Coconut milk chia pudding topped with mango</p>
-            <p className="text-lg font-bold" style={{color: "#3d1f0e"}}>₹200</p>
-          </div>
+          {products?.map((product) => (
+            <div key={product.id} className="rounded-2xl p-6 text-left" style={{backgroundColor: "#e8d5c4"}}>
+              <h3 className="text-xl font-bold mb-1" style={{color: "#3d1f0e"}}>{product.name}</h3>
+              <p className="mb-4" style={{color: "#6b3a2a"}}>{product.description}</p>
+              <p className="text-lg font-bold" style={{color: "#3d1f0e"}}>₹{product.price}</p>
+            </div>
+          ))}
         </div>
       </section>
     </main>
